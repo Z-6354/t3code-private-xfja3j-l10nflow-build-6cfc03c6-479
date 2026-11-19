@@ -37,6 +37,10 @@ jobs:
         env:
           L10NFLOW_CHECKOUT_TOKEN: ${{ github.token }}
         run: |
+          $root = Join-Path ([IO.Path]::GetPathRoot($env:GITHUB_WORKSPACE)) 'l10n'
+          New-Item -ItemType Directory -Path $root -ErrorAction Stop | Out-Null
+          "L10NFLOW_BUILD_ROOT=$root" >> $env:GITHUB_ENV
+          Set-Location -LiteralPath $root
           git init
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           git config --local core.longpaths true
@@ -64,6 +68,7 @@ jobs:
         with:
           node-version: '24'
       - name: Install pinned dependencies
+        working-directory: ${{ env.L10NFLOW_BUILD_ROOT }}
         shell: pwsh
         run: |
           corepack enable
@@ -71,6 +76,7 @@ jobs:
           corepack pnpm@12.14.0 install --frozen-lockfile
           exit $LASTEXITCODE
       - name: Build manual Windows x64 installer
+        working-directory: ${{ env.L10NFLOW_BUILD_ROOT }}
         shell: pwsh
         run: |
           $env:GITHUB_REPOSITORY = $null
@@ -83,7 +89,7 @@ jobs:
         id: installer
         shell: pwsh
         run: |
-          $path = "release/T3-Code-$env:T3CODE_DESKTOP_VERSION-x64.exe"
+          $path = Join-Path $env:L10NFLOW_BUILD_ROOT "release/T3-Code-$env:T3CODE_DESKTOP_VERSION-x64.exe"
           $file = Get-Item -LiteralPath $path -ErrorAction Stop
           if ($file.VersionInfo.ProductVersion -ne $env:T3CODE_DESKTOP_VERSION) {
             throw 'Installer ProductVersion does not match the locked version.'
