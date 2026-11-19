@@ -32,13 +32,34 @@ jobs:
           if (($env:T3CODE_DESKTOP_VERSION.Split('.') | Where-Object { [int]$_ -gt 65535 })) {
             throw 'Installer version exceeds the Windows limit.'
           }
-      - name: Enable Git long paths
+      - name: Check out the locked candidate
         shell: pwsh
-        run: git config --global core.longpaths true
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
-        with:
-          ref: ${{ inputs.candidate_sha }}
-          persist-credentials: false
+        env:
+          L10NFLOW_CHECKOUT_TOKEN: ${{ github.token }}
+        run: |
+          git init
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          git config --local core.longpaths true
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          $url = "https://github.com/$env:GITHUB_REPOSITORY.git"
+          $env:GIT_CONFIG_COUNT = '1'
+          $env:GIT_CONFIG_KEY_0 = 'http.https://github.com/.extraheader'
+          $credential = "x-access-token:$env:L10NFLOW_CHECKOUT_TOKEN"
+          $basic = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($credential))
+          Write-Output "::add-mask::$basic"
+          $env:GIT_CONFIG_VALUE_0 = "AUTHORIZATION: basic $basic"
+          try {
+            git fetch --depth=1 --no-tags --no-recurse-submodules $url $env:L10NFLOW_CANDIDATE_SHA
+            if ($LASTEXITCODE -ne 0) { throw 'Candidate fetch failed.' }
+          } finally {
+            Remove-Item Env:GIT_CONFIG_COUNT, Env:GIT_CONFIG_KEY_0, Env:GIT_CONFIG_VALUE_0
+            Remove-Item Env:L10NFLOW_CHECKOUT_TOKEN
+          }
+          git checkout --detach --no-recurse-submodules FETCH_HEAD
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          if ((git rev-parse HEAD) -cne $env:L10NFLOW_CANDIDATE_SHA) {
+            throw 'Checked out commit differs from the locked candidate.'
+          }
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
         with:
           node-version: '24'
