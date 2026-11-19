@@ -32,6 +32,9 @@ jobs:
           if (($env:T3CODE_DESKTOP_VERSION.Split('.') | Where-Object { [int]$_ -gt 65535 })) {
             throw 'Installer version exceeds the Windows limit.'
           }
+      - name: Enable Git long paths
+        shell: pwsh
+        run: git config --global core.longpaths true
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           ref: ${{ inputs.candidate_sha }}
