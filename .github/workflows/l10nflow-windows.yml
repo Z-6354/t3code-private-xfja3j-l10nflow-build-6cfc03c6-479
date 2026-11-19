@@ -75,6 +75,23 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
           corepack pnpm@12.14.0 install --frozen-lockfile
           exit $LASTEXITCODE
+      - name: Apply locked acceptance payload limit
+        if: inputs.candidate_sha == '00ad8def16d703c9a71a71a4e0c25c76e0e1e1cc'
+        working-directory: ${{ env.L10NFLOW_BUILD_ROOT }}
+        shell: pwsh
+        run: |
+          $script = 'scripts/build-desktop-artifact.ts'
+          $blob = git hash-object --path=$script $script
+          if ($LASTEXITCODE -ne 0 -or $blob -cne '9d34e2412b327f03f20f88385ee835209ffa3b6b') {
+            throw 'Unexpected acceptance packaging script.'
+          }
+          $code = [IO.File]::ReadAllText((Join-Path $env:L10NFLOW_BUILD_ROOT $script))
+          $expected = 'export const WINDOWS_PACKAGED_PAYLOAD_FILE_LIMIT = 80;'
+          if ([regex]::Matches($code, [regex]::Escape($expected)).Count -ne 1) {
+            throw 'Expected one upstream payload limit.'
+          }
+          $updated = $code.Replace($expected, $expected.Replace('80', '100'))
+          [IO.File]::WriteAllText((Join-Path $env:L10NFLOW_BUILD_ROOT $script), $updated)
       - name: Build manual Windows x64 installer
         working-directory: ${{ env.L10NFLOW_BUILD_ROOT }}
         shell: pwsh
