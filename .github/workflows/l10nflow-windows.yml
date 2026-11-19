@@ -1,0 +1,53 @@
+name: L10nFlow Windows installer
+on:
+  push:
+    branches:
+      - 'l10nflow/candidate/*'
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    env:
+      T3CODE_DESKTOP_VERSION: '1.0.2'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with:
+          node-version: '24'
+      - name: Install pinned dependencies
+        shell: pwsh
+        run: |
+          corepack enable
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          corepack pnpm@12.14.0 install --frozen-lockfile
+          exit $LASTEXITCODE
+      - name: Build manual Windows x64 installer
+        shell: pwsh
+        run: |
+          $env:GITHUB_REPOSITORY = $null
+          $env:T3CODE_DESKTOP_UPDATE_REPOSITORY = $null
+          $env:T3CODE_DESKTOP_SIGNED = 'false'
+          $env:T3CODE_DESKTOP_MOCK_UPDATES = 'false'
+          corepack pnpm@12.14.0 run dist:desktop:win:x64
+          exit $LASTEXITCODE
+      - name: Verify installer metadata
+        id: installer
+        shell: pwsh
+        run: |
+          $path = "release/T3-Code-$env:T3CODE_DESKTOP_VERSION-x64.exe"
+          $file = Get-Item -LiteralPath $path -ErrorAction Stop
+          if ($file.VersionInfo.ProductVersion -ne $env:T3CODE_DESKTOP_VERSION) {
+            throw 'Installer ProductVersion does not match the locked version.'
+          }
+          Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256
+          "path=$path" >> $env:GITHUB_OUTPUT
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: l10nflow-windows-x64
+          path: ${{ steps.installer.outputs.path }}
+          if-no-files-found: error
